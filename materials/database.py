@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS layers (
     id TEXT PRIMARY KEY,
     material_id TEXT NOT NULL,
     thickness REAL NOT NULL,
+    conductivity REAL,
     note TEXT,
     FOREIGN KEY(material_id) REFERENCES materials(id)
 );
@@ -39,6 +40,12 @@ class Database:
         cur = self._conn.cursor()
         cur.execute(CREATE_MATERIALS)
         cur.execute(CREATE_LAYERS)
+        # Migración: agregar columna conductivity si no existe (para bases de datos existentes)
+        try:
+            cur.execute("ALTER TABLE layers ADD COLUMN conductivity REAL")
+        except sqlite3.OperationalError:
+            # La columna ya existe, no hacer nada
+            pass
         self._conn.commit()
 
     def add_material(self, material: Material) -> None:
@@ -74,15 +81,15 @@ class Database:
             raise ValueError("Material must be added to DB before adding a layer that references it.")
         cur = self._conn.cursor()
         cur.execute(
-            "INSERT INTO layers (id, material_id, thickness, note) VALUES (?, ?, ?, ?)",
-            (layer.id, layer.material.id, layer.thickness, layer.note),
+            "INSERT INTO layers (id, material_id, thickness, conductivity, note) VALUES (?, ?, ?, ?, ?)",
+            (layer.id, layer.material.id, layer.thickness, layer.conductivity, layer.note),
         )
         self._conn.commit()
 
     def list_layers(self) -> List[Layer]:
         cur = self._conn.cursor()
         cur.execute(
-            "SELECT l.id as lid, l.thickness, l.note, m.id as mid, m.name as mname, m.props as mprops "
+            "SELECT l.id as lid, l.thickness, l.conductivity, l.note, m.id as mid, m.name as mname, m.props as mprops "
             "FROM layers l JOIN materials m ON l.material_id = m.id"
         )
         rows = cur.fetchall()
@@ -90,7 +97,13 @@ class Database:
         for r in rows:
             props = json.loads(r["mprops"]) if r["mprops"] else {}
             mat = Material(name=r["mname"], props=props, id=r["mid"])
-            layer = Layer(material=mat, thickness=r["thickness"], note=r["note"], id=r["lid"])
+            layer = Layer(
+                material=mat, 
+                thickness=r["thickness"], 
+                conductivity=r["conductivity"], 
+                note=r["note"], 
+                id=r["lid"]
+            )
             result.append(layer)
         return result
 

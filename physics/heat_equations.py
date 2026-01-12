@@ -40,7 +40,7 @@ def build_grid_properties(layers: List[Layer], dx_target: float = 0.005
         # number of cells in this layer (at least 1)
         n = max(1, int(max(1, round(L / dx_target))))
         dx = L / n
-        k = layer.material.thermal_conductivity()
+        k = layer.get_conductivity()
         rho = layer.material.density()
         cp = layer.material.specific_heat()
         if k is None or rho is None or cp is None:
